@@ -190,7 +190,7 @@ run.bat
 或者静默后台启动：
 
 ```text
-run-silent.vbs
+PCRun.vbs
 ```
 
 ### 3. 绿色包：自带 Java Runtime
