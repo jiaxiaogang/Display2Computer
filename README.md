@@ -140,7 +140,9 @@ cd D:\repos\Display2Computer
 
 ## Windows 打包运行
 
-生成 jar：
+### 1. 生成 jar
+
+适合开发调试，目标电脑需要有 Java 17。
 
 ```powershell
 cd D:\repos\Display2Computer
@@ -164,6 +166,88 @@ target\display2computer.jar
 ```powershell
 & "C:\Users\jiaxiaogang\service\javaSDK\jdk-17.0.9\bin\java.exe" -jar target\display2computer.jar
 ```
+
+### 2. 绿色包：需要用户安装 Java
+
+生成一个小体积绿色目录，里面包含 jar、启动脚本和说明文档。目标电脑需要已经安装 Java 17，并且能运行 `javaw`。
+
+```powershell
+.\package-green-jre.ps1
+```
+
+生成目录：
+
+```text
+dist\Display2Computer-green-jre\
+```
+
+用户解压/复制该目录后，双击：
+
+```text
+run.bat
+```
+
+或者静默后台启动：
+
+```text
+run-silent.vbs
+```
+
+### 3. 绿色包：自带 Java Runtime
+
+生成一个免安装目录，目标电脑不需要安装 Java。注意这不是单文件 exe，必须保留整个目录。
+
+```powershell
+.\package-portable.ps1
+```
+
+生成目录：
+
+```text
+dist\Display2Computer\
+```
+
+用户双击运行：
+
+```text
+dist\Display2Computer\Display2Computer.exe
+```
+
+### 4. 单个安装包 exe
+
+生成一个 Windows 安装包 exe，适合正式分发。目标电脑不需要安装 Java，但用户需要先双击安装包完成安装。
+
+本机打包要求：
+
+- JDK 17 自带 `jpackage`
+- WiX Toolset 3.x，包含 `candle.exe` 和 `light.exe`
+
+安装 WiX 后运行：
+
+```powershell
+.\package-installer.ps1
+```
+
+生成文件位于：
+
+```text
+dist\
+```
+
+通常会生成类似：
+
+```text
+Display2Computer-0.1.0.exe
+```
+
+### 打包方式对比
+
+| 方式 | 输出 | 目标电脑需要 Java | 是否需要安装 | 适合场景 |
+|---|---|---:|---:|---|
+| `package.ps1` | `target\display2computer.jar` | 是 | 否 | 开发调试 |
+| `package-green-jre.ps1` | `dist\Display2Computer-green-jre\` | 是 | 否 | 小体积绿色包 |
+| `package-portable.ps1` | `dist\Display2Computer\` | 否 | 否 | 推荐绿色分发 |
+| `package-installer.ps1` | `dist\*.exe` | 否 | 是 | 正式安装包 |
 
 如果提示端口占用：
 
