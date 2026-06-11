@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ExternalPlayerController implements PlaybackController {
+    private static volatile String macDesktopBounds = "unknown";
+
     private final String playerCommand;
     private final boolean fullscreen;
     private final int httpPort;
@@ -24,6 +26,11 @@ public class ExternalPlayerController implements PlaybackController {
         this.playerCommand = playerCommand;
         this.fullscreen = fullscreen;
         this.httpPort = httpPort;
+        if (isMac()) {
+            Thread boundsLoader = new Thread(() -> macDesktopBounds = readMacDesktopBoundsFromCommand(), "mac-desktop-bounds-loader");
+            boundsLoader.setDaemon(true);
+            boundsLoader.start();
+        }
     }
 
     @Override
@@ -174,6 +181,7 @@ public class ExternalPlayerController implements PlaybackController {
     }
 
     private List<String> macChromeCommand() {
+        System.out.println("macOS desktop bounds: " + macDesktopBounds);
         return List.of(
                 "open",
                 "-na",
@@ -182,8 +190,40 @@ public class ExternalPlayerController implements PlaybackController {
                 "--user-data-dir=" + System.getProperty("user.home") + "/.show2pc/browser-profile",
                 "--no-first-run",
                 "--autoplay-policy=no-user-gesture-required",
+                "--window-size=" + macDesktopWindowSize(),
                 "--app=" + localPlayerUrl()
         );
+    }
+
+    private String macDesktopWindowSize() {
+        String[] parts = macDesktopBounds.split(",");
+        if (parts.length != 4) {
+            return "1440,900";
+        }
+        try {
+            int left = Integer.parseInt(parts[0].trim());
+            int top = Integer.parseInt(parts[1].trim());
+            int right = Integer.parseInt(parts[2].trim());
+            int bottom = Integer.parseInt(parts[3].trim());
+            return (right - left) + "," + (bottom - top);
+        } catch (NumberFormatException e) {
+            return "1440,900";
+        }
+    }
+
+    private String readMacDesktopBoundsFromCommand() {
+        try {
+            Process boundsProcess = new ProcessBuilder("osascript", "-e", "tell application \"Finder\" to get bounds of window of desktop").start();
+            String bounds = new String(boundsProcess.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            boundsProcess.waitFor();
+            return bounds.isEmpty() ? "unknown" : bounds;
+        } catch (IOException e) {
+            System.err.println("Failed to get macOS desktop bounds: " + e.getMessage());
+            return "unknown";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "unknown";
+        }
     }
 
     private void closeMacBrowserPlayerWindow() {
