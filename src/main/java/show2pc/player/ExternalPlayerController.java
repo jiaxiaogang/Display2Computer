@@ -187,8 +187,18 @@ public class ExternalPlayerController implements PlaybackController {
     }
 
     private void closeMacBrowserPlayerWindow() {
-        String appName = playerCommand.toLowerCase().contains("safari") ? "Safari" : "Google Chrome";
-        String script = "tell application \"" + appName + "\"\n" +
+        if (!playerCommand.toLowerCase().contains("safari")) {
+            try {
+                new ProcessBuilder("pkill", "-f", System.getProperty("user.home") + "/.show2pc/browser-profile").start().waitFor();
+                return;
+            } catch (IOException e) {
+                System.err.println("Failed to stop macOS Chrome player profile: " + e.getMessage());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        String script = "tell application \"Safari\"\n" +
                 "  repeat with w in windows\n" +
                 "    try\n" +
                 "      if URL of active tab of w starts with \"http://localhost:" + httpPort + "/player\" then close w\n" +
