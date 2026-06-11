@@ -56,6 +56,8 @@ public class AppConfig {
         String osName = System.getProperty("os.name", "").toLowerCase();
         if (osName.contains("mac")) {
             return firstExisting(
+                    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                    "/Applications/Safari.app/Contents/MacOS/Safari",
                     "/Applications/VLC.app/Contents/MacOS/VLC",
                     "/opt/homebrew/bin/mpv",
                     "/usr/local/bin/mpv",

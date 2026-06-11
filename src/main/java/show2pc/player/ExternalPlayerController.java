@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ExternalPlayerController implements PlaybackController {
+    private static volatile String macDesktopBounds = "unknown";
+
     private final String playerCommand;
     private final boolean fullscreen;
     private final int httpPort;
@@ -24,6 +26,11 @@ public class ExternalPlayerController implements PlaybackController {
         this.playerCommand = playerCommand;
         this.fullscreen = fullscreen;
         this.httpPort = httpPort;
+        if (isMac()) {
+            Thread boundsLoader = new Thread(() -> macDesktopBounds = readMacDesktopBoundsFromCommand(), "mac-desktop-bounds-loader");
+            boundsLoader.setDaemon(true);
+            boundsLoader.start();
+        }
     }
 
     @Override
@@ -41,6 +48,12 @@ public class ExternalPlayerController implements PlaybackController {
             return;
         }
         stopProcess();
+        if (isMacBrowserPlayer()) {
+            closeMacBrowserPlayerWindow();
+            openMacBrowserPlayer();
+            state = PlayerState.PLAYING;
+            return;
+        }
         if (isBrowserPlayer()) {
             closeBrowserPlayerWindow();
         }
@@ -94,7 +107,7 @@ public class ExternalPlayerController implements PlaybackController {
 
     @Override
     public synchronized PlayerState state() {
-        if (process != null && !process.isAlive() && state == PlayerState.PLAYING) {
+        if (process != null && !process.isAlive() && state == PlayerState.PLAYING && !isMacBrowserPlayer()) {
             state = PlayerState.STOPPED;
         }
         return state;
@@ -149,7 +162,122 @@ public class ExternalPlayerController implements PlaybackController {
 
     private boolean isBrowserPlayer() {
         String player = playerCommand.toLowerCase();
-        return player.contains("chrome") || player.contains("msedge") || player.contains("edge");
+        return player.contains("chrome") || player.contains("msedge") || player.contains("edge") || player.contains("safari");
+    }
+
+    private boolean isMacBrowserPlayer() {
+        return isMac() && isBrowserPlayer();
+    }
+
+    private void openMacBrowserPlayer() {
+        List<String> command = playerCommand.toLowerCase().contains("safari") ? macSafariCommand() : macChromeCommand();
+        try {
+            process = new ProcessBuilder(command).start();
+            System.out.println("Started external player: " + command);
+        } catch (IOException e) {
+            state = PlayerState.STOPPED;
+            System.err.println("Failed to start external player '" + playerCommand + "': " + e.getMessage());
+        }
+    }
+
+    private List<String> macChromeCommand() {
+        System.out.println("macOS desktop bounds: " + macDesktopBounds);
+        return List.of(
+                "open",
+                "-na",
+                "Google Chrome",
+                "--args",
+                "--user-data-dir=" + System.getProperty("user.home") + "/.show2pc/browser-profile",
+                "--no-first-run",
+                "--autoplay-policy=no-user-gesture-required",
+                "--window-size=" + macDesktopWindowSize(),
+                "--app=" + localPlayerUrl()
+        );
+    }
+
+    private String macDesktopWindowSize() {
+        String[] parts = macDesktopBounds.split(",");
+        if (parts.length != 4) {
+            return "1440,900";
+        }
+        try {
+            int left = Integer.parseInt(parts[0].trim());
+            int top = Integer.parseInt(parts[1].trim());
+            int right = Integer.parseInt(parts[2].trim());
+            int bottom = Integer.parseInt(parts[3].trim());
+            return (right - left) + "," + (bottom - top);
+        } catch (NumberFormatException e) {
+            return "1440,900";
+        }
+    }
+
+    private String readMacDesktopBoundsFromCommand() {
+        try {
+            Process boundsProcess = new ProcessBuilder("osascript", "-e", "tell application \"Finder\" to get bounds of window of desktop").start();
+            String bounds = new String(boundsProcess.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            boundsProcess.waitFor();
+            return bounds.isEmpty() ? "unknown" : bounds;
+        } catch (IOException e) {
+            System.err.println("Failed to get macOS desktop bounds: " + e.getMessage());
+            return "unknown";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "unknown";
+        }
+    }
+
+    private void closeMacBrowserPlayerWindow() {
+        if (!playerCommand.toLowerCase().contains("safari")) {
+            try {
+                new ProcessBuilder("pkill", "-f", System.getProperty("user.home") + "/.show2pc/browser-profile").start().waitFor();
+                return;
+            } catch (IOException e) {
+                System.err.println("Failed to stop macOS Chrome player profile: " + e.getMessage());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        String script = "tell application \"Safari\"\n" +
+                "  repeat with w in windows\n" +
+                "    try\n" +
+                "      if URL of active tab of w starts with \"http://localhost:" + httpPort + "/player\" then close w\n" +
+                "    end try\n" +
+                "  end repeat\n" +
+                "end tell";
+        try {
+            new ProcessBuilder("osascript", "-e", script).start().waitFor();
+        } catch (IOException e) {
+            System.err.println("Failed to close macOS browser player window: " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private List<String> macSafariCommand() {
+        String script = "set playerUrl to \"" + appleScriptString(localPlayerUrl()) + "\"\n" +
+                "tell application \"Safari\"\n" +
+                "  activate\n" +
+                "  set foundTab to false\n" +
+                "  repeat with w in windows\n" +
+                "    repeat with t in tabs of w\n" +
+                "      if URL of t starts with \"http://localhost:" + httpPort + "/player\" then\n" +
+                "        set URL of t to playerUrl\n" +
+                "        set current tab of w to t\n" +
+                "        set index of w to 1\n" +
+                "        set foundTab to true\n" +
+                "        exit repeat\n" +
+                "      end if\n" +
+                "    end repeat\n" +
+                "    if foundTab then exit repeat\n" +
+                "  end repeat\n" +
+                "  if not foundTab then open location playerUrl\n" +
+                "end tell";
+        return List.of("osascript", "-e", script);
+    }
+
+    private String appleScriptString(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private Rectangle usableScreenBounds() {
@@ -190,6 +318,10 @@ public class ExternalPlayerController implements PlaybackController {
 
     private boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase().contains("win");
+    }
+
+    private boolean isMac() {
+        return System.getProperty("os.name", "").toLowerCase().contains("mac");
     }
 
     private void stopProcess() {
