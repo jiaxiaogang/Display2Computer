@@ -12,10 +12,13 @@ import show2pc.upnp.UpnpHttpServer;
 import show2pc.ui.TrayController;
 import show2pc.util.EventLog;
 
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 
 public class Main {
     public static void main(String[] args) throws Exception {
+        configureMacUiMode();
+
         AppConfig config = AppConfig.fromSystemProperties();
         DeviceIdentity identity = DeviceIdentity.loadOrCreate(config.dataDirectory());
         EventLog eventLog = new EventLog();
@@ -55,5 +58,12 @@ public class Main {
         System.out.println("Display2Computer is running. Open http://localhost:" + config.httpPort() + "/");
         eventLog.add("Display2Computer started with UDN " + identity.udn());
         stopSignal.await();
+    }
+
+    private static void configureMacUiMode() {
+        if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")) {
+            System.setProperty("java.awt.headless", "false");
+            System.setProperty("apple.awt.UIElement", "true");
+        }
     }
 }

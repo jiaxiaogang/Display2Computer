@@ -5,6 +5,7 @@ import show2pc.util.EventLog;
 
 import java.awt.AWTException;
 import java.awt.Desktop;
+import java.awt.EventQueue;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.MenuItem;
@@ -27,6 +28,14 @@ public class TrayController {
     }
 
     public void install() {
+        EventQueue.invokeLater(this::installOnEventThread);
+    }
+
+    public void remove() {
+        EventQueue.invokeLater(this::removeOnEventThread);
+    }
+
+    private void installOnEventThread() {
         if (!SystemTray.isSupported()) {
             eventLog.add("System tray is not supported");
             return;
@@ -35,8 +44,9 @@ public class TrayController {
         PopupMenu menu = new PopupMenu();
         MenuItem open = new MenuItem("Open Status Page");
         open.addActionListener(event -> openStatusPage());
-        MenuItem exit = new MenuItem("Exit Display2Computer");
+        MenuItem exit = new MenuItem(isMac() ? "Quit Display2Computer" : "Exit Display2Computer");
         exit.addActionListener(event -> {
+            removeOnEventThread();
             shutdown.run();
             System.exit(0);
         });
@@ -56,9 +66,10 @@ public class TrayController {
         }
     }
 
-    public void remove() {
+    private void removeOnEventThread() {
         if (trayIcon != null && SystemTray.isSupported()) {
             SystemTray.getSystemTray().remove(trayIcon);
+            trayIcon = null;
         }
     }
 
@@ -81,5 +92,9 @@ public class TrayController {
         graphics.drawString("S", 4, 12);
         graphics.dispose();
         return image;
+    }
+
+    private boolean isMac() {
+        return System.getProperty("os.name", "").toLowerCase().contains("mac");
     }
 }

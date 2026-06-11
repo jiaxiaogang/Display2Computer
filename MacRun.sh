@@ -21,4 +21,9 @@ if [[ -d "$RESOURCES" ]]; then
   cp -R "$RESOURCES"/. "$CLASSES"/
 fi
 
-exec "$JAVA" -cp "$CLASSES" show2pc.Main
+exec "$JAVA" \
+  -Djava.awt.headless=false \
+  -Dapple.awt.UIElement=true \
+  -Xdock:name="接受投屏" \
+  -cp "$CLASSES" \
+  show2pc.Main
