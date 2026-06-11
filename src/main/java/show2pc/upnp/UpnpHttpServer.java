@@ -72,8 +72,8 @@ public class UpnpHttpServer {
             return;
         }
         String html = "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">" +
-                "<title>Show2PC</title><style>body{font-family:system-ui;margin:32px;line-height:1.5}input{width:70%;padding:8px}button{padding:8px 12px}pre{background:#111;color:#eee;padding:16px;overflow:auto}</style></head>" +
-                "<body><h1>Show2PC</h1><p>DLNA/UPnP 投屏接收服务正在运行。</p>" +
+                "<title>Display2Computer</title><style>body{font-family:system-ui;margin:32px;line-height:1.5}input{width:70%;padding:8px}button{padding:8px 12px}pre{background:#111;color:#eee;padding:16px;overflow:auto}</style></head>" +
+                "<body><h1>Display2Computer</h1><p>DLNA/UPnP 投屏接收服务正在运行。</p>" +
                 "<form method=\"post\" action=\"/api/play\"><input name=\"url\" placeholder=\"输入 HLS/MP4 URL 手动测试播放\"><button>播放</button></form>" +
                 "<h2>状态</h2><pre id=\"status\">loading...</pre>" +
                 "<script>async function load(){const r=await fetch('/api/status');document.getElementById('status').textContent=await r.text()}load();setInterval(load,2000)</script>" +
@@ -90,6 +90,7 @@ public class UpnpHttpServer {
             body.append("  http://").append(address.getHostAddress()).append(':').append(config.httpPort()).append("/\n");
         }
         body.append("Player: ").append(config.playerCommand()).append('\n');
+        body.append("Fullscreen: ").append(config.fullscreen()).append('\n');
         body.append("State: ").append(player.state()).append('\n');
         body.append("Current URI: ").append(player.currentUri()).append('\n');
         body.append("Volume: ").append(player.volume()).append('\n');

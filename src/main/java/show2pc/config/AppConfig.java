@@ -10,14 +10,16 @@ public class AppConfig {
     private final String modelName;
     private final int httpPort;
     private final String playerCommand;
+    private final boolean fullscreen;
     private final Path dataDirectory;
 
-    public AppConfig(String friendlyName, String manufacturer, String modelName, int httpPort, String playerCommand, Path dataDirectory) {
+    public AppConfig(String friendlyName, String manufacturer, String modelName, int httpPort, String playerCommand, boolean fullscreen, Path dataDirectory) {
         this.friendlyName = friendlyName;
         this.manufacturer = manufacturer;
         this.modelName = modelName;
         this.httpPort = httpPort;
         this.playerCommand = playerCommand;
+        this.fullscreen = fullscreen;
         this.dataDirectory = dataDirectory;
     }
 
@@ -25,13 +27,29 @@ public class AppConfig {
         String userHome = System.getProperty("user.home");
         Path dataDirectory = Paths.get(System.getProperty("show2pc.dataDir", userHome + "/.show2pc"));
         return new AppConfig(
-                System.getProperty("show2pc.name", "Show2PC"),
-                System.getProperty("show2pc.manufacturer", "Show2PC"),
-                System.getProperty("show2pc.modelName", "Show2PC Media Renderer"),
+                System.getProperty("show2pc.name", defaultFriendlyName()),
+                System.getProperty("show2pc.manufacturer", "Display2Computer"),
+                System.getProperty("show2pc.modelName", "Display2Computer Media Renderer"),
                 Integer.getInteger("show2pc.httpPort", 49152),
                 System.getProperty("show2pc.player", defaultPlayerCommand()),
+                Boolean.parseBoolean(System.getProperty("show2pc.fullscreen", "true")),
                 dataDirectory
         );
+    }
+
+    private static String defaultFriendlyName() {
+        return "Display2(" + System.getProperty("user.name", "User") + "-" + osType() + ")";
+    }
+
+    private static String osType() {
+        String osName = System.getProperty("os.name", "").toLowerCase();
+        if (osName.contains("win")) {
+            return "Win";
+        }
+        if (osName.contains("mac")) {
+            return "Mac";
+        }
+        return "Linux";
     }
 
     private static String defaultPlayerCommand() {
@@ -88,6 +106,10 @@ public class AppConfig {
 
     public String playerCommand() {
         return playerCommand;
+    }
+
+    public boolean fullscreen() {
+        return fullscreen;
     }
 
     public Path dataDirectory() {

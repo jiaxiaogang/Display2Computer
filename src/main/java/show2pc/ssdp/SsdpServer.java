@@ -146,7 +146,7 @@ public class SsdpServer {
                 "CACHE-CONTROL: max-age=1800\r\n" +
                 "EXT:\r\n" +
                 "LOCATION: http://" + locationIp + ":" + config.httpPort() + "/device.xml\r\n" +
-                "SERVER: Java/" + System.getProperty("java.version") + " UPnP/1.0 Show2PC/0.1\r\n" +
+                "SERVER: Java/" + System.getProperty("java.version") + " UPnP/1.0 Display2Computer/0.1\r\n" +
                 "ST: " + st + "\r\n" +
                 "USN: " + usn(st) + "\r\n" +
                 "\r\n";
@@ -175,7 +175,7 @@ public class SsdpServer {
                             "LOCATION: http://" + address.getHostAddress() + ":" + config.httpPort() + "/device.xml\r\n" +
                             "NT: " + nt + "\r\n" +
                             "NTS: " + nts + "\r\n" +
-                            "SERVER: Java/" + System.getProperty("java.version") + " UPnP/1.0 Show2PC/0.1\r\n" +
+                            "SERVER: Java/" + System.getProperty("java.version") + " UPnP/1.0 Display2Computer/0.1\r\n" +
                             "USN: " + usn(nt) + "\r\n\r\n";
                     byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
                     socket.send(new DatagramPacket(bytes, bytes.length, group, SSDP_PORT));

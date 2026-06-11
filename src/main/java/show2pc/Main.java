@@ -9,6 +9,7 @@ import show2pc.services.connection.ConnectionManagerService;
 import show2pc.services.rendering.RenderingControlService;
 import show2pc.ssdp.SsdpServer;
 import show2pc.upnp.UpnpHttpServer;
+import show2pc.ui.TrayController;
 import show2pc.util.EventLog;
 
 import java.util.concurrent.CountDownLatch;
@@ -18,7 +19,7 @@ public class Main {
         AppConfig config = AppConfig.fromSystemProperties();
         DeviceIdentity identity = DeviceIdentity.loadOrCreate(config.dataDirectory());
         EventLog eventLog = new EventLog();
-        PlaybackController player = new ExternalPlayerController(config.playerCommand());
+        PlaybackController player = new ExternalPlayerController(config.playerCommand(), config.fullscreen());
 
         UpnpHttpServer httpServer = new UpnpHttpServer(config, identity, player, eventLog);
         httpServer.register("/upnp/control/AVTransport", new AVTransportService(player, eventLog));
@@ -29,14 +30,30 @@ public class Main {
         SsdpServer ssdpServer = new SsdpServer(config, identity, eventLog);
         ssdpServer.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Shutting down Show2PC");
+        CountDownLatch stopSignal = new CountDownLatch(1);
+        final boolean[] stopped = {false};
+        Runnable shutdown = () -> {
+            synchronized (stopped) {
+                if (stopped[0]) {
+                    return;
+                }
+                stopped[0] = true;
+            }
+            System.out.println("Shutting down Display2Computer");
             ssdpServer.stop();
             httpServer.stop();
+            stopSignal.countDown();
+        };
+
+        TrayController trayController = new TrayController(config, eventLog, shutdown);
+        trayController.install();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            trayController.remove();
+            shutdown.run();
         }));
 
-        System.out.println("Show2PC is running. Open http://localhost:" + config.httpPort() + "/");
-        eventLog.add("Show2PC started with UDN " + identity.udn());
-        new CountDownLatch(1).await();
+        System.out.println("Display2Computer is running. Open http://localhost:" + config.httpPort() + "/");
+        eventLog.add("Display2Computer started with UDN " + identity.udn());
+        stopSignal.await();
     }
 }

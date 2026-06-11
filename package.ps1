@@ -7,7 +7,7 @@ $Jar = Join-Path $JavaHome "bin\jar.exe"
 $Java = Join-Path $JavaHome "bin\java.exe"
 $Classes = Join-Path $Root "target\classes"
 $Resources = Join-Path $Root "src\main\resources"
-$Output = Join-Path $Root "target\show2pc.jar"
+$Output = Join-Path $Root "target\display2computer.jar"
 
 Write-Host "Compiling..."
 New-Item -ItemType Directory -Force -Path $Classes | Out-Null

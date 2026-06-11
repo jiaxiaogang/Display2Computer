@@ -7,6 +7,7 @@ import java.util.List;
 
 public class ExternalPlayerController implements PlaybackController {
     private final String playerCommand;
+    private final boolean fullscreen;
     private Process process;
     private String currentUri = "";
     private String metadata = "";
@@ -14,8 +15,9 @@ public class ExternalPlayerController implements PlaybackController {
     private int volume = 80;
     private boolean muted;
 
-    public ExternalPlayerController(String playerCommand) {
+    public ExternalPlayerController(String playerCommand, boolean fullscreen) {
         this.playerCommand = playerCommand;
+        this.fullscreen = fullscreen;
     }
 
     @Override
@@ -33,9 +35,7 @@ public class ExternalPlayerController implements PlaybackController {
             return;
         }
         stopProcess();
-        List<String> command = new ArrayList<>();
-        command.add(playerCommand);
-        command.add(currentUri);
+        List<String> command = buildCommand();
         try {
             process = new ProcessBuilder(command).start();
             state = PlayerState.PLAYING;
@@ -106,6 +106,22 @@ public class ExternalPlayerController implements PlaybackController {
     @Override
     public synchronized boolean muted() {
         return muted;
+    }
+
+    private List<String> buildCommand() {
+        List<String> command = new ArrayList<>();
+        command.add(playerCommand);
+        String player = playerCommand.toLowerCase();
+        if (fullscreen && (player.contains("chrome") || player.contains("msedge") || player.contains("edge"))) {
+            command.add("--new-window");
+            command.add("--start-fullscreen");
+        } else if (fullscreen && player.contains("vlc")) {
+            command.add("--fullscreen");
+        } else if (fullscreen && player.contains("mpv")) {
+            command.add("--fs");
+        }
+        command.add(currentUri);
+        return command;
     }
 
     private void stopProcess() {
