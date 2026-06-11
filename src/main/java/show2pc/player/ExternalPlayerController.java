@@ -41,11 +41,14 @@ public class ExternalPlayerController implements PlaybackController {
             return;
         }
         stopProcess();
+        if (isBrowserPlayer()) {
+            closeBrowserPlayerWindow();
+        }
         List<String> command = buildCommand();
         try {
             process = new ProcessBuilder(command).start();
             if (isBrowserPlayer()) {
-                keepBrowserPlayerOnTop();
+                bringBrowserPlayerToForeground();
             }
             state = PlayerState.PLAYING;
             System.out.println("Started external player: " + command);
@@ -153,19 +156,40 @@ public class ExternalPlayerController implements PlaybackController {
         return GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
     }
 
-    private void keepBrowserPlayerOnTop() {
-        if (!System.getProperty("os.name", "").toLowerCase().contains("win")) {
+    private void closeBrowserPlayerWindow() {
+        if (!isWindows()) {
             return;
         }
-        String script = "Start-Sleep -Milliseconds 800;" +
-                "Add-Type '[DllImport(\"user32.dll\")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);' -Name Win32 -Namespace Native;" +
+        String script = "$p=Get-Process chrome,msedge -ErrorAction SilentlyContinue|Where-Object{$_.MainWindowTitle -eq 'Display2Computer Player'};" +
+                "foreach($w in $p){$w.CloseMainWindow()|Out-Null};" +
+                "Start-Sleep -Milliseconds 400";
+        try {
+            new ProcessBuilder("powershell.exe", "-NoProfile", "-Command", script).start().waitFor();
+        } catch (IOException e) {
+            System.err.println("Failed to close browser player window: " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void bringBrowserPlayerToForeground() {
+        if (!isWindows()) {
+            return;
+        }
+        String script = "Add-Type '[DllImport(\"user32.dll\")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);[DllImport(\"user32.dll\")] public static extern bool BringWindowToTop(IntPtr hWnd);[DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd);' -Name Win32 -Namespace Native;" +
+                "for($i=0;$i -lt 10;$i++){" +
                 "$p=Get-Process chrome,msedge -ErrorAction SilentlyContinue|Where-Object{$_.MainWindowTitle -eq 'Display2Computer Player'}|Select-Object -First 1;" +
-                "if($p){[Native.Win32]::SetWindowPos($p.MainWindowHandle,[IntPtr](-1),0,0,0,0,0x0001 -bor 0x0002)|Out-Null}";
+                "if($p){[Native.Win32]::ShowWindowAsync($p.MainWindowHandle,9)|Out-Null;[Native.Win32]::BringWindowToTop($p.MainWindowHandle)|Out-Null;[Native.Win32]::SetForegroundWindow($p.MainWindowHandle)|Out-Null;break};" +
+                "Start-Sleep -Milliseconds 200}";
         try {
             new ProcessBuilder("powershell.exe", "-NoProfile", "-Command", script).start();
         } catch (IOException e) {
-            System.err.println("Failed to keep browser player on top: " + e.getMessage());
+            System.err.println("Failed to bring browser player to foreground: " + e.getMessage());
         }
+    }
+
+    private boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
 
     private void stopProcess() {
