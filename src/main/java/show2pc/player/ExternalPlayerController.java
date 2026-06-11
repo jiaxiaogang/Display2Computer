@@ -42,6 +42,7 @@ public class ExternalPlayerController implements PlaybackController {
         }
         stopProcess();
         if (isMacBrowserPlayer()) {
+            closeMacBrowserPlayerWindow();
             openMacBrowserPlayer();
             state = PlayerState.PLAYING;
             return;
@@ -162,8 +163,7 @@ public class ExternalPlayerController implements PlaybackController {
     }
 
     private void openMacBrowserPlayer() {
-        String browserName = playerCommand.toLowerCase().contains("safari") ? "Safari" : "Google Chrome";
-        List<String> command = List.of("open", "-a", browserName, localPlayerUrl());
+        List<String> command = playerCommand.toLowerCase().contains("safari") ? macSafariCommand() : macChromeCommand();
         try {
             process = new ProcessBuilder(command).start();
             System.out.println("Started external player: " + command);
@@ -171,6 +171,63 @@ public class ExternalPlayerController implements PlaybackController {
             state = PlayerState.STOPPED;
             System.err.println("Failed to start external player '" + playerCommand + "': " + e.getMessage());
         }
+    }
+
+    private List<String> macChromeCommand() {
+        return List.of(
+                "open",
+                "-na",
+                "Google Chrome",
+                "--args",
+                "--user-data-dir=" + System.getProperty("user.home") + "/.show2pc/browser-profile",
+                "--no-first-run",
+                "--autoplay-policy=no-user-gesture-required",
+                "--app=" + localPlayerUrl()
+        );
+    }
+
+    private void closeMacBrowserPlayerWindow() {
+        String appName = playerCommand.toLowerCase().contains("safari") ? "Safari" : "Google Chrome";
+        String script = "tell application \"" + appName + "\"\n" +
+                "  repeat with w in windows\n" +
+                "    try\n" +
+                "      if URL of active tab of w starts with \"http://localhost:" + httpPort + "/player\" then close w\n" +
+                "    end try\n" +
+                "  end repeat\n" +
+                "end tell";
+        try {
+            new ProcessBuilder("osascript", "-e", script).start().waitFor();
+        } catch (IOException e) {
+            System.err.println("Failed to close macOS browser player window: " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private List<String> macSafariCommand() {
+        String script = "set playerUrl to \"" + appleScriptString(localPlayerUrl()) + "\"\n" +
+                "tell application \"Safari\"\n" +
+                "  activate\n" +
+                "  set foundTab to false\n" +
+                "  repeat with w in windows\n" +
+                "    repeat with t in tabs of w\n" +
+                "      if URL of t starts with \"http://localhost:" + httpPort + "/player\" then\n" +
+                "        set URL of t to playerUrl\n" +
+                "        set current tab of w to t\n" +
+                "        set index of w to 1\n" +
+                "        set foundTab to true\n" +
+                "        exit repeat\n" +
+                "      end if\n" +
+                "    end repeat\n" +
+                "    if foundTab then exit repeat\n" +
+                "  end repeat\n" +
+                "  if not foundTab then open location playerUrl\n" +
+                "end tell";
+        return List.of("osascript", "-e", script);
+    }
+
+    private String appleScriptString(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private Rectangle usableScreenBounds() {
