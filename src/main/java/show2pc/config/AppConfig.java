@@ -32,7 +32,7 @@ public class AppConfig {
                 System.getProperty("show2pc.modelName", "Display2Computer Media Renderer"),
                 Integer.getInteger("show2pc.httpPort", 49152),
                 System.getProperty("show2pc.player", defaultPlayerCommand()),
-                Boolean.parseBoolean(System.getProperty("show2pc.fullscreen", "true")),
+                Boolean.parseBoolean(System.getProperty("show2pc.fullscreen", "false")),
                 dataDirectory
         );
     }

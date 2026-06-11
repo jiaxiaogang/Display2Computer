@@ -19,7 +19,7 @@ public class Main {
         AppConfig config = AppConfig.fromSystemProperties();
         DeviceIdentity identity = DeviceIdentity.loadOrCreate(config.dataDirectory());
         EventLog eventLog = new EventLog();
-        PlaybackController player = new ExternalPlayerController(config.playerCommand(), config.fullscreen());
+        PlaybackController player = new ExternalPlayerController(config.playerCommand(), config.fullscreen(), config.httpPort());
 
         UpnpHttpServer httpServer = new UpnpHttpServer(config, identity, player, eventLog);
         httpServer.register("/upnp/control/AVTransport", new AVTransportService(player, eventLog));

@@ -44,6 +44,7 @@ public class UpnpHttpServer {
         server.createContext("/", this::handleIndex);
         server.createContext("/api/status", this::handleStatus);
         server.createContext("/api/play", this::handleManualPlay);
+        server.createContext("/player", this::handlePlayer);
         server.createContext("/device.xml", this::handleDeviceDescription);
         server.createContext("/upnp/scpd/AVTransport.xml", exchange -> handleResource(exchange, "upnp/avtransport-scpd.xml", "text/xml; charset=utf-8"));
         server.createContext("/upnp/scpd/RenderingControl.xml", exchange -> handleResource(exchange, "upnp/rendering-control-scpd.xml", "text/xml; charset=utf-8"));
@@ -115,6 +116,20 @@ public class UpnpHttpServer {
         exchange.getResponseHeaders().add("Location", "/");
         exchange.sendResponseHeaders(303, -1);
         exchange.close();
+    }
+
+    private void handlePlayer(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            send(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed");
+            return;
+        }
+        String url = queryValue(exchange.getRequestURI().getRawQuery(), "url");
+        String html = "<!doctype html><html><head><meta charset=\"utf-8\"><title>Display2Computer Player</title>" +
+                "<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}video{display:block;width:100vw;height:100vh;object-fit:contain;background:#000}</style></head>" +
+                "<body><video id=\"video\" controls autoplay playsinline src=\"" + XmlUtil.escape(url) + "\"></video>" +
+                "<script>document.getElementById('video').play().catch(()=>{});</script>" +
+                "</body></html>";
+        send(exchange, 200, "text/html; charset=utf-8", html);
     }
 
     private void handleDeviceDescription(HttpExchange exchange) throws IOException {
@@ -193,9 +208,16 @@ public class UpnpHttpServer {
     }
 
     private String parseFormUrl(String body) {
-        for (String part : body.split("&")) {
+        return queryValue(body, "url");
+    }
+
+    private String queryValue(String query, String name) {
+        if (query == null) {
+            return "";
+        }
+        for (String part : query.split("&")) {
             int index = part.indexOf('=');
-            if (index > 0 && part.substring(0, index).equals("url")) {
+            if (index > 0 && part.substring(0, index).equals(name)) {
                 return java.net.URLDecoder.decode(part.substring(index + 1), StandardCharsets.UTF_8);
             }
         }
