@@ -41,6 +41,11 @@ public class ExternalPlayerController implements PlaybackController {
             return;
         }
         stopProcess();
+        if (isMacBrowserPlayer()) {
+            openMacBrowserPlayer();
+            state = PlayerState.PLAYING;
+            return;
+        }
         if (isBrowserPlayer()) {
             closeBrowserPlayerWindow();
         }
@@ -94,7 +99,7 @@ public class ExternalPlayerController implements PlaybackController {
 
     @Override
     public synchronized PlayerState state() {
-        if (process != null && !process.isAlive() && state == PlayerState.PLAYING) {
+        if (process != null && !process.isAlive() && state == PlayerState.PLAYING && !isMacBrowserPlayer()) {
             state = PlayerState.STOPPED;
         }
         return state;
@@ -149,7 +154,23 @@ public class ExternalPlayerController implements PlaybackController {
 
     private boolean isBrowserPlayer() {
         String player = playerCommand.toLowerCase();
-        return player.contains("chrome") || player.contains("msedge") || player.contains("edge");
+        return player.contains("chrome") || player.contains("msedge") || player.contains("edge") || player.contains("safari");
+    }
+
+    private boolean isMacBrowserPlayer() {
+        return isMac() && isBrowserPlayer();
+    }
+
+    private void openMacBrowserPlayer() {
+        String browserName = playerCommand.toLowerCase().contains("safari") ? "Safari" : "Google Chrome";
+        List<String> command = List.of("open", "-a", browserName, localPlayerUrl());
+        try {
+            process = new ProcessBuilder(command).start();
+            System.out.println("Started external player: " + command);
+        } catch (IOException e) {
+            state = PlayerState.STOPPED;
+            System.err.println("Failed to start external player '" + playerCommand + "': " + e.getMessage());
+        }
     }
 
     private Rectangle usableScreenBounds() {
@@ -190,6 +211,10 @@ public class ExternalPlayerController implements PlaybackController {
 
     private boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase().contains("win");
+    }
+
+    private boolean isMac() {
+        return System.getProperty("os.name", "").toLowerCase().contains("mac");
     }
 
     private void stopProcess() {
