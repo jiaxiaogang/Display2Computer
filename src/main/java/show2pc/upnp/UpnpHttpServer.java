@@ -15,6 +15,7 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -44,6 +45,8 @@ public class UpnpHttpServer {
         server.createContext("/", this::handleIndex);
         server.createContext("/api/status", this::handleStatus);
         server.createContext("/api/play", this::handleManualPlay);
+        server.createContext("/api/player/status", this::handlePlayerStatus);
+        server.createContext("/api/player/command", this::handlePlayerCommand);
         server.createContext("/player", this::handlePlayer);
         server.createContext("/device.xml", this::handleDeviceDescription);
         server.createContext("/upnp/scpd/AVTransport.xml", exchange -> handleResource(exchange, "upnp/avtransport-scpd.xml", "text/xml; charset=utf-8"));
@@ -93,6 +96,8 @@ public class UpnpHttpServer {
         body.append("Player: ").append(config.playerCommand()).append('\n');
         body.append("Fullscreen: ").append(config.fullscreen()).append('\n');
         body.append("State: ").append(player.state()).append('\n');
+        body.append("Position: ").append(player.position()).append('\n');
+        body.append("Duration: ").append(player.duration()).append('\n');
         body.append("Current URI: ").append(player.currentUri()).append('\n');
         body.append("Volume: ").append(player.volume()).append('\n');
         body.append("Muted: ").append(player.muted()).append('\n');
@@ -118,6 +123,36 @@ public class UpnpHttpServer {
         exchange.close();
     }
 
+    private void handlePlayerStatus(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            send(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed");
+            return;
+        }
+        String body = readBody(exchange);
+        player.updateBrowserStatus(
+                parseSeconds(queryValue(body, "position")),
+                parseSeconds(queryValue(body, "duration")),
+                Boolean.parseBoolean(queryValue(body, "paused")),
+                Boolean.parseBoolean(queryValue(body, "ended"))
+        );
+        exchange.sendResponseHeaders(204, -1);
+        exchange.close();
+    }
+
+    private void handlePlayerCommand(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            send(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed");
+            return;
+        }
+        PlaybackController.BrowserCommand command = player.pollBrowserCommand();
+        if (!command.hasSeek()) {
+            send(exchange, 200, "application/json; charset=utf-8", "{}");
+            return;
+        }
+        String body = "{\"seek\":" + seconds(command.seekPosition()) + ",\"seq\":" + command.sequence() + "}";
+        send(exchange, 200, "application/json; charset=utf-8", body);
+    }
+
     private void handlePlayer(HttpExchange exchange) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             send(exchange, 405, "text/plain; charset=utf-8", "Method Not Allowed");
@@ -127,7 +162,34 @@ public class UpnpHttpServer {
         String html = "<!doctype html><html><head><meta charset=\"utf-8\"><title>Display2Computer Player</title>" +
                 "<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}video{display:block;width:100vw;height:100vh;object-fit:contain;background:#000}</style></head>" +
                 "<body><video id=\"video\" controls autoplay playsinline src=\"" + XmlUtil.escape(url) + "\"></video>" +
-                "<script>document.getElementById('video').play().catch(()=>{});</script>" +
+                "<script>" +
+                "const video=document.getElementById('video');" +
+                "let pendingSeek=null,lastSeq=0;" +
+                "function finite(v){return Number.isFinite(v)?v:0}" +
+                "async function report(){" +
+                "const body=new URLSearchParams({position:String(finite(video.currentTime)),duration:String(finite(video.duration)),paused:String(video.paused),ended:String(video.ended)});" +
+                "try{await fetch('/api/player/status',{method:'POST',body})}catch(e){}" +
+                "}" +
+                "function applySeek(seconds){" +
+                "if(video.readyState===0){pendingSeek=seconds;return}" +
+                "const duration=finite(video.duration);" +
+                "let target=Math.max(0,seconds);" +
+                "if(duration>0)target=Math.min(target,duration);" +
+                "if(Math.abs(video.currentTime-target)>0.25)video.currentTime=target;" +
+                "report();" +
+                "}" +
+                "async function poll(){" +
+                "try{" +
+                "const command=await (await fetch('/api/player/command')).json();" +
+                "if(command.seek!==undefined&&command.seq!==lastSeq){lastSeq=command.seq;applySeek(command.seek)}" +
+                "}catch(e){}" +
+                "}" +
+                "video.addEventListener('loadedmetadata',()=>{if(pendingSeek!==null){const target=pendingSeek;pendingSeek=null;applySeek(target)}report()});" +
+                "['durationchange','timeupdate','seeked','play','pause','ended'].forEach(e=>video.addEventListener(e,report));" +
+                "video.play().catch(()=>{});" +
+                "setInterval(report,500);" +
+                "setInterval(poll,300);" +
+                "</script>" +
                 "</body></html>";
         send(exchange, 200, "text/html; charset=utf-8", html);
     }
@@ -209,6 +271,28 @@ public class UpnpHttpServer {
 
     private String parseFormUrl(String body) {
         return queryValue(body, "url");
+    }
+
+    private Duration parseSeconds(String value) {
+        if (value == null || value.isEmpty()) {
+            return Duration.ZERO;
+        }
+        try {
+            double seconds = Double.parseDouble(value);
+            if (!Double.isFinite(seconds) || seconds <= 0) {
+                return Duration.ZERO;
+            }
+            return Duration.ofMillis(Math.round(seconds * 1000));
+        } catch (NumberFormatException e) {
+            return Duration.ZERO;
+        }
+    }
+
+    private String seconds(Duration duration) {
+        if (duration == null || duration.isNegative()) {
+            return "0";
+        }
+        return String.format(java.util.Locale.ROOT, "%.3f", duration.toMillis() / 1000.0);
     }
 
     private String queryValue(String query, String name) {

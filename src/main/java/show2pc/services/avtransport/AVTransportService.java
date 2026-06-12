@@ -42,7 +42,10 @@ public class AVTransportService implements SoapActionHandler {
                 player.stop();
                 return SoapEnvelope.success(SERVICE_TYPE, action, "");
             case "Seek":
-                player.seek(parseRelTime(SoapEnvelope.value(requestBody, "Target")));
+                String unit = SoapEnvelope.value(requestBody, "Unit");
+                if (unit.isEmpty() || "REL_TIME".equalsIgnoreCase(unit)) {
+                    player.seek(parseRelTime(SoapEnvelope.value(requestBody, "Target")));
+                }
                 return SoapEnvelope.success(SERVICE_TYPE, action, "");
             case "Next":
             case "Previous":

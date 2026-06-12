@@ -19,6 +19,10 @@ public class ExternalPlayerController implements PlaybackController {
     private String currentUri = "";
     private String metadata = "";
     private PlayerState state = PlayerState.STOPPED;
+    private Duration lastPosition = Duration.ZERO;
+    private Duration lastDuration = Duration.ZERO;
+    private Duration pendingSeek;
+    private long seekSequence;
     private int volume = 80;
     private boolean muted;
 
@@ -38,6 +42,9 @@ public class ExternalPlayerController implements PlaybackController {
         this.currentUri = uri == null ? "" : uri;
         this.metadata = metadata == null ? "" : metadata;
         this.state = PlayerState.STOPPED;
+        this.lastPosition = Duration.ZERO;
+        this.lastDuration = Duration.ZERO;
+        this.pendingSeek = null;
         System.out.println("Loaded media URI: " + this.currentUri);
     }
 
@@ -85,7 +92,11 @@ public class ExternalPlayerController implements PlaybackController {
 
     @Override
     public synchronized void seek(Duration position) {
-        System.out.println("Seek requested to " + position + "; external process mode does not support reliable seek yet");
+        Duration target = normalize(position);
+        pendingSeek = target;
+        seekSequence++;
+        lastPosition = target;
+        System.out.println("Seek requested to " + target);
     }
 
     @Override
@@ -114,13 +125,36 @@ public class ExternalPlayerController implements PlaybackController {
     }
 
     @Override
-    public Duration position() {
-        return Duration.ZERO;
+    public synchronized Duration position() {
+        return lastPosition;
     }
 
     @Override
-    public Duration duration() {
-        return Duration.ZERO;
+    public synchronized Duration duration() {
+        return lastDuration;
+    }
+
+    @Override
+    public synchronized void updateBrowserStatus(Duration position, Duration duration, boolean paused, boolean ended) {
+        lastPosition = normalize(position);
+        lastDuration = normalize(duration);
+        if (ended) {
+            state = PlayerState.STOPPED;
+        } else if (paused) {
+            state = PlayerState.PAUSED;
+        } else {
+            state = PlayerState.PLAYING;
+        }
+    }
+
+    @Override
+    public synchronized BrowserCommand pollBrowserCommand() {
+        if (pendingSeek == null) {
+            return BrowserCommand.none();
+        }
+        BrowserCommand command = BrowserCommand.seek(pendingSeek, seekSequence);
+        pendingSeek = null;
+        return command;
     }
 
     @Override
@@ -282,6 +316,13 @@ public class ExternalPlayerController implements PlaybackController {
 
     private Rectangle usableScreenBounds() {
         return GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+    }
+
+    private Duration normalize(Duration duration) {
+        if (duration == null || duration.isNegative()) {
+            return Duration.ZERO;
+        }
+        return duration;
     }
 
     private void closeBrowserPlayerWindow() {
